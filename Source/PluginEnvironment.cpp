@@ -92,13 +92,21 @@ bool CamomileEnvironment::localize()
     File plugin(File::getSpecialLocation(File::currentApplicationFile));
     if(plugin.exists() && (plugin.hasFileExtension("component") ||
                            plugin.hasFileExtension("vst") ||
-                           plugin.hasFileExtension("vst3")))
+                           plugin.hasFileExtension("vst3") ))
     {
         
         plugin_name = plugin.getFileNameWithoutExtension().toStdString();
         plugin_path = plugin.getParentDirectory().getFullPathName().toStdString();
         patch_name = plugin_name + std::string(".pd");
         patch_path = plugin_path + "/" + plugin.getFileName().toStdString() + std::string("/Contents/Resources");
+        return true;
+    }
+    else if(plugin.exists() && plugin.hasFileExtension("dylib"))
+    {
+        plugin_name = plugin.getFileNameWithoutExtension().toStdString();
+        plugin_path = plugin.getParentDirectory().getFullPathName().toStdString();
+        patch_name = plugin_name + std::string(".pd");
+        patch_path = plugin_path;
         return true;
     }
     else
@@ -109,9 +117,17 @@ bool CamomileEnvironment::localize()
         plugin = File::getSpecialLocation(File::currentExecutableFile);
         if(plugin.exists() && (plugin.hasFileExtension("component") ||
                                plugin.hasFileExtension("vst") ||
-                               plugin.hasFileExtension("vst3")))
+                               plugin.hasFileExtension("vst3") ))
         {
             errors.clear();
+            plugin_name = plugin.getFileNameWithoutExtension().toStdString();
+            plugin_path = plugin.getParentDirectory().getFullPathName().toStdString();
+            patch_name = plugin_name + std::string(".pd");
+            patch_path = plugin_path;
+            return true;
+        }
+        else if(plugin.exists() && plugin.hasFileExtension("dylib"))
+        {
             plugin_name = plugin.getFileNameWithoutExtension().toStdString();
             plugin_path = plugin.getParentDirectory().getFullPathName().toStdString();
             patch_name = plugin_name + std::string(".pd");
