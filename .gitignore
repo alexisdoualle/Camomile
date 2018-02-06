@@ -36,6 +36,7 @@
 # Juce & ThirdParty
 /Builds/MacOSX/build/
 /Builds/LinuxMakefile/build/
+/Builds/.backup/
 
 #Examples
 /Plugins/Examples/GuyMoquet/
