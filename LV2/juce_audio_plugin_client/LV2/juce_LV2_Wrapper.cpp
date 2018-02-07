@@ -24,7 +24,7 @@
  #define JucePlugin_WantsLV2State 1
 #endif
 
-#if JUCE_LINUX && ! JUCE_AUDIOPROCESSOR_NO_GUI
+#if JUCE_LINUX
  #include <X11/Xlib.h>
  #undef KeyPress
 #endif
@@ -49,44 +49,6 @@
 #define JUCE_LV2_STATE_STRING_URI "urn:juce:stateString"
 #define JUCE_LV2_STATE_BINARY_URI "urn:juce:stateBinary"
 
-//==============================================================================
-#if JUCE_LINUX
-
-class SharedMessageThread : public Thread
-{
-public:
-    SharedMessageThread()
-      : Thread ("Lv2MessageThread"),
-        initialised (false)
-    {
-        startThread (7);
-
-        while (! initialised)
-            sleep (1);
-    }
-
-    ~SharedMessageThread()
-    {
-        MessageManager::getInstance()->stopDispatchLoop();
-        waitForThreadToExit (5000);
-    }
-
-    void run() override
-    {
-        const ScopedJuceInitialiser_GUI juceInitialiser;
-
-        MessageManager::getInstance()->setCurrentThreadAsMessageThread();
-        initialised = true;
-
-        MessageManager::getInstance()->runDispatchLoop();
-    }
-
-private:
-    volatile bool initialised;
-};
-#endif
-
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 //==============================================================================
 /**
     Lightweight DocumentWindow subclass for external ui
@@ -623,8 +585,6 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuceLv2UIWrapper)
 };
 
-#endif /* JUCE_AUDIOPROCESSOR_NO_GUI */
-
 //==============================================================================
 /**
     Juce LV2 handle
@@ -664,25 +624,15 @@ public:
         usingNominalBlockLength (false)
     {
         jassert (filter != nullptr);
-        portAudioIns.resize(filter->getTotalNumInputChannels());
-        portAudioOuts.resize(filter->getTotalNumOutputChannels());
         filter->setPlayConfigDetails (filter->getTotalNumInputChannels(), filter->getTotalNumOutputChannels(), 0, 0);
         filter->setPlayHead (this);
         portEventsIn = nullptr;
         portMidiOut = nullptr;
         portFreewheel = nullptr;
         portLatency = nullptr;
-
-        for (int i=0; i < filter->getTotalNumInputChannels(); ++i)
-        {
-            portAudioIns.getReference(i) = nullptr;
-        }
-        for (int i=0; i < filter->getTotalNumOutputChannels(); ++i)
-        {
-            portAudioOuts.getReference(i) = nullptr;
-        }
-
-        portControls.insertMultiple (0, nullptr, filter->getNumParameters());
+        portAudioIns.insertMultiple(0, nullptr, filter->getTotalNumInputChannels());
+        portAudioOuts.insertMultiple(0, nullptr, filter->getTotalNumOutputChannels());
+        portControls.insertMultiple(0, nullptr, filter->getNumParameters());
 
         for (int i=0; i < filter->getNumParameters(); ++i)
             lastControlValues.add (filter->getParameter(i));
@@ -690,7 +640,7 @@ public:
         curPosInfo.resetToDefault();
 
         // we need URID_Map first
-        for (int i=0; features[i] != nullptr; ++i)
+        for (int i = 0; features[i] != nullptr; ++i)
         {
             if (strcmp(features[i]->URI, LV2_URID__map) == 0)
             {
@@ -721,7 +671,7 @@ public:
             uridTimeFrame = uridMap->map(uridMap->handle, LV2_TIME__frame);
             uridTimeSpeed = uridMap->map(uridMap->handle, LV2_TIME__speed);
 
-            for (int i=0; features[i] != nullptr; ++i)
+            for (int i = 0; features[i] != nullptr; ++i)
             {
                 if (strcmp(features[i]->URI, LV2_OPTIONS__options) == 0)
                 {
@@ -760,18 +710,10 @@ public:
 
     ~JuceLv2Wrapper ()
     {
-        const juce::MessageManagerLock mmLock;
-
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
-        ui = nullptr;
-#endif
-        filter = nullptr;
-
         if (progDesc.name != nullptr)
+        {
             free((void*)progDesc.name);
-
-        portControls.clear();
-        lastControlValues.clear();
+        }
     }
 
     //==============================================================================
@@ -780,10 +722,9 @@ public:
     void lv2ConnectPort (uint32_t portId, void* dataLocation)
     {
         uint32_t index = 0;
-        if (portId == index++)
+        if (portId == 0)
         {
             portEventsIn = (LV2_Atom_Sequence*)dataLocation;
-            return;
         }
 
         if (portId == index++)
@@ -821,7 +762,7 @@ public:
                 return;
             }
         }
-
+    
         for (int i = 0; i < filter->getNumParameters(); ++i)
         {
             if (portId == index++)
@@ -955,7 +896,7 @@ public:
                             // need to handle this first as other values depend on it
                             if (speed != nullptr)
                             {
-                                /**/ if (speed->type == uridAtomDouble)
+                                if (speed->type == uridAtomDouble)
                                     lastPositionData.speed = ((LV2_Atom_Double*)speed)->body;
                                 else if (speed->type == uridAtomFloat)
                                     lastPositionData.speed = ((LV2_Atom_Float*)speed)->body;
@@ -969,7 +910,7 @@ public:
 
                             if (bar != nullptr)
                             {
-                                /**/ if (bar->type == uridAtomDouble)
+                                if (bar->type == uridAtomDouble)
                                     lastPositionData.bar = ((LV2_Atom_Double*)bar)->body;
                                 else if (bar->type == uridAtomFloat)
                                     lastPositionData.bar = ((LV2_Atom_Float*)bar)->body;
@@ -981,7 +922,7 @@ public:
 
                             if (barBeat != nullptr)
                             {
-                                /**/ if (barBeat->type == uridAtomDouble)
+                                if (barBeat->type == uridAtomDouble)
                                     lastPositionData.barBeat = ((LV2_Atom_Double*)barBeat)->body;
                                 else if (barBeat->type == uridAtomFloat)
                                     lastPositionData.barBeat = ((LV2_Atom_Float*)barBeat)->body;
@@ -993,7 +934,7 @@ public:
 
                             if (beatUnit != nullptr)
                             {
-                                /**/ if (beatUnit->type == uridAtomDouble)
+                                if (beatUnit->type == uridAtomDouble)
                                     lastPositionData.beatUnit = ((LV2_Atom_Double*)beatUnit)->body;
                                 else if (beatUnit->type == uridAtomFloat)
                                     lastPositionData.beatUnit = ((LV2_Atom_Float*)beatUnit)->body;
@@ -1008,7 +949,7 @@ public:
 
                             if (beatsPerBar != nullptr)
                             {
-                                /**/ if (beatsPerBar->type == uridAtomDouble)
+                                if (beatsPerBar->type == uridAtomDouble)
                                     lastPositionData.beatsPerBar = ((LV2_Atom_Double*)beatsPerBar)->body;
                                 else if (beatsPerBar->type == uridAtomFloat)
                                     lastPositionData.beatsPerBar = ((LV2_Atom_Float*)beatsPerBar)->body;
@@ -1023,7 +964,7 @@ public:
 
                             if (beatsPerMinute != nullptr)
                             {
-                                /**/ if (beatsPerMinute->type == uridAtomDouble)
+                                if (beatsPerMinute->type == uridAtomDouble)
                                     lastPositionData.beatsPerMinute = ((LV2_Atom_Double*)beatsPerMinute)->body;
                                 else if (beatsPerMinute->type == uridAtomFloat)
                                     lastPositionData.beatsPerMinute = ((LV2_Atom_Float*)beatsPerMinute)->body;
@@ -1043,7 +984,7 @@ public:
 
                             if (frame != nullptr)
                             {
-                                /**/ if (frame->type == uridAtomDouble)
+                                if (frame->type == uridAtomDouble)
                                     lastPositionData.frame = ((LV2_Atom_Double*)frame)->body;
                                 else if (frame->type == uridAtomFloat)
                                     lastPositionData.frame = ((LV2_Atom_Float*)frame)->body;
@@ -1206,8 +1147,6 @@ public:
 
     const LV2_Program_Descriptor* lv2GetProgram (uint32_t index)
     {
-        jassert (filter != nullptr);
-
         if (progDesc.name != nullptr)
         {
             free((void*)progDesc.name);
@@ -1297,24 +1236,16 @@ public:
         {
             String stateData (CharPointer_UTF8(static_cast<const char*>(data)));
             filter->setStateInformationString (stateData);
-
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
             if (ui != nullptr)
                 ui->repaint();
-#endif
-
             return LV2_STATE_SUCCESS;
         }
 #else
         if (type == uridMap->map (uridMap->handle, LV2_ATOM__Chunk))
         {
             filter->setCurrentProgramStateInformation (data, static_cast<int>(size));
-
-           #if ! JUCE_AUDIOPROCESSOR_NO_GUI
             if (ui != nullptr)
                 ui->repaint();
-           #endif
-
             return LV2_STATE_SUCCESS;
         }
 #endif
@@ -1331,7 +1262,6 @@ public:
         return true;
     }
 
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
     //==============================================================================
     JuceLv2UIWrapper* getUI (LV2UI_Write_Function writeFunction, LV2UI_Controller controller, LV2UI_Widget* widget,
                              const LV2_Feature* const* features, bool isExternal)
@@ -1345,13 +1275,10 @@ public:
 
         return ui;
     }
-#endif
 
 private:
     juce::ScopedPointer<juce::AudioProcessor> filter;
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
     juce::ScopedPointer<JuceLv2UIWrapper> ui;
-#endif
     juce::HeapBlock<float*> channels;
     juce::MidiBuffer midiEvents;
 
@@ -1425,22 +1352,22 @@ static LV2_Handle juceLV2_Instantiate (const LV2_Descriptor*, double sampleRate,
 
 static void juceLV2_ConnectPort (LV2_Handle handle, uint32_t port, void* dataLocation)
 {
-    static_cast<JuceLv2Wrapper *>(handle)->lv2ConnectPort (port, dataLocation);
+    //static_cast<JuceLv2Wrapper *>(handle)->lv2ConnectPort (port, dataLocation);
 }
 
 static void juceLV2_Activate (LV2_Handle handle)
 {
-    static_cast<JuceLv2Wrapper *>(handle)->lv2Activate();
+    //static_cast<JuceLv2Wrapper *>(handle)->lv2Activate();
 }
 
 static void juceLV2_Run( LV2_Handle handle, uint32_t sampleCount)
 {
-    static_cast<JuceLv2Wrapper *>(handle)->lv2Run (sampleCount);
+    //static_cast<JuceLv2Wrapper *>(handle)->lv2Run (sampleCount);
 }
 
 static void juceLV2_Deactivate (LV2_Handle handle)
 {
-    static_cast<JuceLv2Wrapper *>(handle)->lv2Deactivate();
+    //static_cast<JuceLv2Wrapper *>(handle)->lv2Deactivate();
 }
 
 static void juceLV2_Cleanup (LV2_Handle handle)
@@ -1483,6 +1410,7 @@ static LV2_State_Status juceLV2_RestoreState (LV2_Handle handle, LV2_State_Retri
 
 static const void* juceLV2_ExtensionData (const char* uri)
 {
+    return nullptr;
     static const LV2_Options_Interface options = { juceLV2_getOptions, juceLV2_setOptions };
     static const LV2_Programs_Interface programs = { juceLV2_getProgram, juceLV2_selectProgram };
     static const LV2_State_Interface state = { juceLV2_SaveState, juceLV2_RestoreState };
@@ -1497,7 +1425,6 @@ static const void* juceLV2_ExtensionData (const char* uri)
     return nullptr;
 }
 
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 //==============================================================================
 // LV2 UI descriptor functions
 
@@ -1531,7 +1458,6 @@ static void juceLV2UI_Cleanup (LV2UI_Handle handle)
 {
     ((JuceLv2UIWrapper*)handle)->lv2Cleanup();
 }
-#endif
 
 //==============================================================================
 // static LV2 Descriptor objects
@@ -1547,7 +1473,6 @@ static const LV2_Descriptor JuceLv2Plugin = {
     juceLV2_ExtensionData
 };
 
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 static const LV2UI_Descriptor JuceLv2UI_External = {
     strdup((juce::String(JucePlugin_LV2URI) + juce::String("#ExternalUI")).toRawUTF8()),
     juceLV2UI_InstantiateExternal,
@@ -1563,17 +1488,14 @@ static const LV2UI_Descriptor JuceLv2UI_Parent = {
     nullptr,
     nullptr
 };
-#endif
 
 static const struct DescriptorCleanup {
     DescriptorCleanup() {}
     ~DescriptorCleanup()
     {
         free((void*)JuceLv2Plugin.URI);
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
         free((void*)JuceLv2UI_External.URI);
         free((void*)JuceLv2UI_Parent.URI);
-#endif
     }
 } _descCleanup;
 
@@ -1592,7 +1514,6 @@ JUCE_EXPORTED_FUNCTION const LV2_Descriptor* lv2_descriptor (uint32_t index)
     return (index == 0) ? &JuceLv2Plugin : nullptr;
 }
 
-#if ! JUCE_AUDIOPROCESSOR_NO_GUI
 JUCE_EXPORTED_FUNCTION const LV2UI_Descriptor* lv2ui_descriptor (uint32_t index);
 JUCE_EXPORTED_FUNCTION const LV2UI_Descriptor* lv2ui_descriptor (uint32_t index)
 {
@@ -1606,6 +1527,5 @@ JUCE_EXPORTED_FUNCTION const LV2UI_Descriptor* lv2ui_descriptor (uint32_t index)
         return nullptr;
     }
 }
-#endif
 
 #endif

@@ -5,12 +5,15 @@ CamomileFx=CamomileFx
 VstExtension=vst
 Vst3Extension=vst3
 AuExtension=component
+Lv2Extension=lv2
 LibExtension=so
 ThisPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 ################################################################################
 #           Install all the plugins from ./Builds to a destination             #
 ################################################################################
+
+# /usr/local/lib/lv2/
 install_plugin_mac() {
     local InstallationPath
     if [ "$2" == "$VstExtension" ]; then
@@ -19,6 +22,8 @@ install_plugin_mac() {
         InstallationPath=$3/VST3
     elif [ "$2" == "$AuExtension" ]; then
         InstallationPath=$3/Components
+    elif [ "$2" == "$Lv2Extension" ]; then
+        InstallationPath="/usr/local/lib/lv2/"
     else
         echo -e "\033[31m"$1.$2" extension not recognized\033[0m"
         return
@@ -156,6 +161,36 @@ clean_all_plugins_linux() {
 ################################################################################
 #                       Generate all the plugins from ./Builds                    #
 ################################################################################
+generate_plugin_lv2() {
+    local PluginName="$3"
+    local OldLv2Folder="$ThisPath/../$1.$Lv2Extension"
+    local NewLv2Folder="$ThisPath/Builds/$PluginName.$Lv2Extension"
+
+    if [ -d $OldLv2Folder ]; then
+        if [ -d $NewLv2Folder ]; then
+            rm -rf $NewLv2Folder
+        fi
+
+        cp -rf "$OldLv2Folder" "$NewLv2Folder"
+        cp -rf $2/$PluginName/ $NewLv2Folder
+        mv -f "$NewLv2Folder/$1.dylib" "$NewLv2Folder/$PluginName.dylib"
+        mv -f "$NewLv2Folder/$1.ttl" "$NewLv2Folder/$PluginName.ttl"
+
+        while read a ; do
+            echo ${a//CamomilePluginName/$PluginName}
+        done < "$NewLv2Folder/manifest.ttl" > "$NewLv2Folder/manifest.ttl.temp"
+        mv -f "$NewLv2Folder/manifest.ttl.temp" "$NewLv2Folder/manifest.ttl"
+
+        while read a ; do
+            echo ${a//CamomilePluginName/$PluginName}
+        done < "$NewLv2Folder/$PluginName.ttl" > "$NewLv2Folder/$PluginName.ttl.temp"
+        mv -f "$NewLv2Folder/$PluginName.ttl.temp" "$NewLv2Folder/$PluginName.ttl"
+
+        echo -n $Lv2Extension " "
+    else
+        echo -n -e "\033[2;30m"$Lv2Extension" \033[0m"
+    fi
+}
 
 generate_plugin_vst() {
     if [ -d $ThisPath/../$1.$VstExtension ]; then
@@ -279,6 +314,7 @@ generate_plugins_mac() {
         return
     fi
     echo -n $2 "-" $type "- ("
+    generate_plugin_lv2 $CamomileName $1 $2
     generate_plugin_vst $CamomileName $1 $2
     generate_plugin_vst3 $CamomileName $1 $2
     generate_plugin_au $CamomileName $1 $2
